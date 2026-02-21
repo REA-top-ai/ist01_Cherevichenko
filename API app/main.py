@@ -17,7 +17,3 @@ if __name__ == '__main__':
 
     result = methods.get_sources(api_key=API_key)
     pprint.pprint(result)
-
-
-
-

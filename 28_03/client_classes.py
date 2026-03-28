@@ -1,0 +1,38 @@
+from abc import ABC, abstractmethod
+
+class BankAccount(ABC):
+
+    @abstractmethod
+    def add_money(self, amount):
+        pass
+
+
+class DepositBankAccount(BankAccount):
+    def __init__(self, client_name):
+        self.__client_name = client_name
+        self.__balance = 0
+    
+    def add_money(self, amount):
+        self.__balance += amount
+        print(f'{self.__client_name} added {amount}. Balance is {self.__balance}')
+
+    def payments(self, amount):
+        if self.__balance >= amount:
+            self.__balance -= amount
+            print(f'{self.__client_name} pay {amount}. Balance is {self.__balance}')
+        else:
+            print(f'Not enough money. Balance is {self.__balance}')
+
+    def get_balance(self):
+        return self.__balance
+
+
+class Client:
+    def __init__(self, name):
+        self.name = name
+        self.accounts = list()
+
+    def create_bank_account(self):
+        new_account = DepositBankAccount(self.name)
+        self.accounts.append(new_account)
+    

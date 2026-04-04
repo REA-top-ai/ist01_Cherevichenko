@@ -1,4 +1,19 @@
 from abc import ABC, abstractmethod
+import time
+
+
+def log_transaction(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+
+        print(f'transaction start at {start_time} end at {end_time}')
+
+        return result
+    return wrapper
+
+        
 
 class BankAccount(ABC):
 
@@ -12,10 +27,12 @@ class DepositBankAccount(BankAccount):
         self.__client_name = client_name
         self.__balance = 0
     
+    @log_transaction
     def add_money(self, amount):
         self.__balance += amount
         print(f'{self.__client_name} added {amount}. Balance is {self.__balance}')
 
+    @log_transaction
     def payments(self, amount):
         if self.__balance >= amount:
             self.__balance -= amount

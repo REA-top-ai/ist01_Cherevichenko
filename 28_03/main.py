@@ -1,8 +1,8 @@
-from client_classes import BankAccount, Client
+from client_classes import DepositBankAccount, BankAccount, Client
 
 def main():
-    client1 = BankAccount('Alice')
-    client2 = BankAccount('Bob')
+    client1 = DepositBankAccount('Alice')
+    client2 = DepositBankAccount('Bob')
     
     client1.add_money(200)
     client2.add_money(500)

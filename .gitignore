@@ -16,3 +16,15 @@ env/
 # IDE
 .vscode/
 .idea/
+
+# C++ build
+build/
+cmake-build-*/
+
+# Claude Code
+CLAUDE.md
+.claude/
+
+# bitmap: personal notes and task slides
+bitmap/notes.md
+bitmap/*.pptx

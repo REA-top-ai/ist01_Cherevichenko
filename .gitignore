@@ -27,4 +27,6 @@ CLAUDE.md
 
 # bitmap: personal notes and task slides
 bitmap/notes.md
+bitmap/theory_16bit.md
+bitmap/implementation_16bit.md
 bitmap/*.pptx

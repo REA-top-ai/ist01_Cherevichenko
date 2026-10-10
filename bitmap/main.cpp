@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <cmath>
 
 #define ERR_IF_FALSE(check, err_message, arg) if (!(check)) {std::cerr << err_message << arg << std::endl; return 1;}
 constexpr auto ERR_CANT_OPEN_FILE{"File can't be open: "};
@@ -57,12 +58,34 @@ static void print_pixel(const Pixel pixel) {
     std::cout << "R: " << static_cast<int>(pixel.R) << " G: " << static_cast<int>(pixel.G) << " B: " << static_cast<int>(pixel.B);
 }
 
+enum pixel_color{r,g,b};
+
+unsigned char recover_16b_value(unsigned char subpixel, pixel_color color) {
+    switch (color) {
+        case r:
+            return subpixel * (pow(2,8)-1) / (pow(2,5)-1);
+            break;
+        case g:
+            return subpixel * (pow(2,8)-1) / (pow(2,6)-1);
+            break;
+        case b:
+            return subpixel * (pow(2,8)-1) / (pow(2,5)-1);
+            break;
+    }
+
+    return 0;
+}
+
 static Pixel pixel_from_16bit(const unsigned char* pixel) {
     const unsigned short value = *reinterpret_cast<const unsigned short*>(pixel);
 
-    const unsigned char R = ((value & 0xF800) >> 11) * 255 / 31;
-    const unsigned char G = ((value & 0x07E0) >> 5) * 255 / 63;
-    const unsigned char B = (value & 0x001F) * 255 / 31;
+    constexpr unsigned short b_16bit_mask = 0B0000000000011111;
+    constexpr unsigned short g_16bit_mask = 0B0000011111100000;
+    constexpr unsigned short r_16bit_mask = 0B1111100000000000;
+
+    const unsigned char R = recover_16b_value((value & r_16bit_mask) >> 11, r);
+    const unsigned char G = recover_16b_value((value & g_16bit_mask) >> 5, g);
+    const unsigned char B = recover_16b_value(value & b_16bit_mask, b);
 
     return Pixel{B, G, R};
 }
@@ -91,15 +114,10 @@ int main(const int argc, char** argv) {
         colors_used, color_important] = *headers_values;
 
     ERR_IF_FALSE(bit_count == 24 || bit_count == 16, ERR_UNSUPPORTED_BIT_COUNT, bit_count);
-
-    if (bit_count == 16) {
-        ERR_IF_FALSE(compression == 3, ERR_UNSUPPORTED_COMPRESSION, compression);
-    }
+    ERR_IF_FALSE(bit_count != 16 || compression == 3, ERR_UNSUPPORTED_COMPRESSION, compression);
 
     auto pixels = new unsigned char[image_size];
-    bool image_was_read = load_file_bytes(path, pixels, image_size, data_offset);
-    if (!image_was_read) {delete[] pixels;}
-    ERR_IF_FALSE(image_was_read, ERR_CANT_READ_IMAGE, path);
+    ERR_IF_FALSE(load_file_bytes(path, pixels, image_size, data_offset), ERR_CANT_READ_IMAGE, path);
 
     unsigned int bytes_per_pixel = bit_count / 8;
 

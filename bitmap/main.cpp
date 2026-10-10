@@ -57,33 +57,19 @@ static void print_pixel(const Pixel pixel) {
     std::cout << "R: " << static_cast<int>(pixel.R) << " G: " << static_cast<int>(pixel.G) << " B: " << static_cast<int>(pixel.B);
 }
 
-static unsigned int find_shift(unsigned int mask) {
-    unsigned int shift = 0;
-    while ((mask & 1) == 0) {
-        mask >>= 1; shift++;
-    }
-
-    return shift;
-}
-
-static unsigned char get_channel(unsigned short value, unsigned int mask) {
-    unsigned int shift = find_shift(mask);
-    return static_cast<unsigned char>(((value & mask) >> shift) * 255 / (mask >> shift));
-}
-
-static Pixel pixel_from_16bit(const unsigned char* pixel, unsigned int mask_red, unsigned int mask_green, unsigned int mask_blue) {
+static Pixel pixel_from_16bit(const unsigned char* pixel) {
     const unsigned short value = *reinterpret_cast<const unsigned short*>(pixel);
 
-    const unsigned char R = get_channel(value, mask_red);
-    const unsigned char G = get_channel(value, mask_green);
-    const unsigned char B = get_channel(value, mask_blue);
+    const unsigned char R = ((value & 0xF800) >> 11) * 255 / 31;
+    const unsigned char G = ((value & 0x07E0) >> 5) * 255 / 63;
+    const unsigned char B = (value & 0x001F) * 255 / 31;
 
     return Pixel{B, G, R};
 }
 
-static Pixel to_pixel(const unsigned char* pixel, unsigned int bit_count, unsigned int mask_red, unsigned int mask_green, unsigned int mask_blue) {
+static Pixel to_pixel(const unsigned char* pixel, unsigned int bit_count) {
     if (bit_count == 16) {
-        return pixel_from_16bit(pixel, mask_red, mask_green, mask_blue);
+        return pixel_from_16bit(pixel);
     }
 
     return *reinterpret_cast<const Pixel*>(pixel);
@@ -91,7 +77,7 @@ static Pixel to_pixel(const unsigned char* pixel, unsigned int bit_count, unsign
 
 int main(const int argc, char** argv) {
     unsigned char headers[54]{};
-    const char* path = argc > 1 ? argv[1] : "../lena.bmp";
+    const char* path = argc > 1 ? argv[1] : "../Rufous-Hummingbird_16.bmp";
 
     bool file_was_read = load_file_bytes(path, headers, 54);
     ERR_IF_FALSE(file_was_read, ERR_CANT_OPEN_FILE, path);
@@ -106,17 +92,8 @@ int main(const int argc, char** argv) {
 
     ERR_IF_FALSE(bit_count == 24 || bit_count == 16, ERR_UNSUPPORTED_BIT_COUNT, bit_count);
 
-    unsigned int mask_red = 0x7C00;
-    unsigned int mask_green = 0x03E0;
-    unsigned int mask_blue = 0x001F;
     if (bit_count == 16) {
-        ERR_IF_FALSE(compression == 0 || compression == 3, ERR_UNSUPPORTED_COMPRESSION, compression);
-
-        if (compression == 3) {
-            load_file_bytes(path, reinterpret_cast<unsigned char*>(&mask_red), 4, 54);
-            load_file_bytes(path, reinterpret_cast<unsigned char*>(&mask_green), 4, 58);
-            load_file_bytes(path, reinterpret_cast<unsigned char*>(&mask_blue), 4, 62);
-        }
+        ERR_IF_FALSE(compression == 3, ERR_UNSUPPORTED_COMPRESSION, compression);
     }
 
     auto pixels = new unsigned char[image_size];
@@ -129,10 +106,10 @@ int main(const int argc, char** argv) {
     unsigned int last_x = width - 1;
     unsigned int last_y = height - 1;
 
-    Pixel left_up = to_pixel(get_pixel_address(pixels, 0, 0, width, height, bytes_per_pixel), bit_count, mask_red, mask_green, mask_blue);
-    Pixel right_up = to_pixel(get_pixel_address(pixels, last_x, 0, width, height, bytes_per_pixel), bit_count, mask_red, mask_green, mask_blue);
-    Pixel left_down = to_pixel(get_pixel_address(pixels, 0, last_y, width, height, bytes_per_pixel), bit_count, mask_red, mask_green, mask_blue);
-    Pixel right_down = to_pixel(get_pixel_address(pixels, last_x, last_y, width, height, bytes_per_pixel), bit_count, mask_red, mask_green, mask_blue);
+    Pixel left_up = to_pixel(get_pixel_address(pixels, 0, 0, width, height, bytes_per_pixel), bit_count);
+    Pixel right_up = to_pixel(get_pixel_address(pixels, last_x, 0, width, height, bytes_per_pixel), bit_count);
+    Pixel left_down = to_pixel(get_pixel_address(pixels, 0, last_y, width, height, bytes_per_pixel), bit_count);
+    Pixel right_down = to_pixel(get_pixel_address(pixels, last_x, last_y, width, height, bytes_per_pixel), bit_count);
 
     print_pixel(left_up); std::cout << "   ";
     print_pixel(right_up); std::cout << std::endl;

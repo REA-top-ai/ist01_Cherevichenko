@@ -9,34 +9,6 @@ constexpr auto ERR_UNSUPPORTED_BIT_COUNT{"Unsupported bits per pixel: "};
 constexpr auto ERR_CANT_READ_IMAGE{"Can't read image data: "};
 constexpr auto ERR_UNSUPPORTED_COMPRESSION{"Unsupported compression: "};
 
-#pragma pack(push, 1)
-struct BMP_header {
-    char sign[2];
-    unsigned int file_size;
-    unsigned int reserved;
-    unsigned int data_offset;
-    unsigned int info_header_size;
-    unsigned int width;
-    unsigned int height;
-    unsigned short planes;
-    unsigned short bit_count;
-    unsigned int compression;
-    unsigned int image_size;
-    unsigned int x_pixels_per_m;
-    unsigned int y_pixels_per_m;
-    unsigned int colors_used;
-    unsigned int color_important;
-};
-#pragma pack(pop)
-
-#pragma pack(push, 1)
-struct Pixel {
-    unsigned char B;
-    unsigned char G;
-    unsigned char R;
-};
-#pragma pack(pop)
-
 static bool load_file_bytes(const char* path, unsigned char* buffer, const unsigned int size, const unsigned int offset = 0) {
     std::ifstream file(path, std::ios::binary);
     if (!file) { return false; }
@@ -45,95 +17,145 @@ static bool load_file_bytes(const char* path, unsigned char* buffer, const unsig
     return true;
 }
 
-static bool is_BMP(const unsigned char* headers) {
-    return (headers[0] == 'B' && headers[1] == 'M');
-}
+#pragma pack(push, 1)
+class BMP_header {
+    public:
+        unsigned char sign[2];
+        unsigned int file_size;
+        unsigned int reserved;
+        unsigned int data_offset;
+        unsigned int info_header_size;
+        unsigned int width;
+        unsigned int height;
+        unsigned short planes;
+        unsigned short bit_count;
+        unsigned int compression;
+        unsigned int image_size;
+        unsigned int x_pixels_per_m;
+        unsigned int y_pixels_per_m;
+        unsigned int colors_used;
+        unsigned int color_important;
 
-static const unsigned char* get_pixel_address(const unsigned char* pixels, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int bytes_per_pixel) {
-    unsigned int row = height - 1 - y;
-    return pixels + (row * width + x) * bytes_per_pixel;
-}
+        bool load(const char* path) {
+            return load_file_bytes(path, reinterpret_cast<unsigned char*>(this), sizeof(BMP_header));
+        }
 
-static void print_pixel(const Pixel pixel) {
-    std::cout << "R: " << static_cast<int>(pixel.R) << " G: " << static_cast<int>(pixel.G) << " B: " << static_cast<int>(pixel.B);
-}
+        bool is_BMP() const {
+            return (sign[0] == 'B' && sign[1] == 'M');
+        }
 
-enum pixel_color{r,g,b};
+        bool is_supported_bit_count() const {
+            return (bit_count == 24 || bit_count == 16);
+        }
 
-unsigned char recover_16b_value(unsigned char subpixel, pixel_color color) {
-    switch (color) {
-        case r:
-            return subpixel * (pow(2,8)-1) / (pow(2,5)-1);
-            break;
-        case g:
-            return subpixel * (pow(2,8)-1) / (pow(2,6)-1);
-            break;
-        case b:
-            return subpixel * (pow(2,8)-1) / (pow(2,5)-1);
-            break;
-    }
+        bool is_supported_compression() const {
+            return (bit_count == 24 || (bit_count == 16 && compression == 3));
+        }
+};
+#pragma pack(pop)
 
-    return 0;
-}
+#pragma pack(push, 1)
+class Pixel {
+    public:
+        unsigned char B;
+        unsigned char G;
+        unsigned char R;
 
-static Pixel pixel_from_16bit(const unsigned char* pixel) {
-    const unsigned short value = *reinterpret_cast<const unsigned short*>(pixel);
+        void print_pixel() const {
+            std::cout << "R: " << static_cast<int>(R) << " G: " << static_cast<int>(G) << " B: " << static_cast<int>(B);
+        }
+};
+#pragma pack(pop)
 
-    constexpr unsigned short b_16bit_mask = 0B0000000000011111;
-    constexpr unsigned short g_16bit_mask = 0B0000011111100000;
-    constexpr unsigned short r_16bit_mask = 0B1111100000000000;
+class Bitmap {
+    public:
+        Bitmap(BMP_header headers) {
+            this->headers = headers;
+            this->pixels = new unsigned char[headers.image_size];
+        }
 
-    const unsigned char R = recover_16b_value((value & r_16bit_mask) >> 11, r);
-    const unsigned char G = recover_16b_value((value & g_16bit_mask) >> 5, g);
-    const unsigned char B = recover_16b_value(value & b_16bit_mask, b);
+        bool load(const char* path) {
+            return load_file_bytes(path, pixels, headers.image_size, headers.data_offset);
+        }
 
-    return Pixel{B, G, R};
-}
+        Pixel get_pixel(unsigned int x, unsigned int y) const {
+            return to_pixel(get_pixel_address(x, y));
+        }
 
-static Pixel to_pixel(const unsigned char* pixel, unsigned int bit_count) {
-    if (bit_count == 16) {
-        return pixel_from_16bit(pixel);
-    }
+        ~Bitmap() {
+            delete[] pixels;
+        }
 
-    return *reinterpret_cast<const Pixel*>(pixel);
-}
+    private:
+        BMP_header headers;
+        unsigned char* pixels;
+
+        const unsigned char* get_pixel_address(unsigned int x, unsigned int y) const {
+            unsigned int row = headers.height - 1 - y;
+            return pixels + (row * headers.width + x) * (headers.bit_count / 8);
+            }
+
+        Pixel to_pixel(const unsigned char* pixel) const {
+            if (headers.bit_count == 16) {
+                return pixel_from_16bit(pixel);
+            }
+
+            return *reinterpret_cast<const Pixel*>(pixel);
+            }
+
+        enum pixel_color{r, g, b};
+        static unsigned char recover_16b_value (unsigned char subpixel, pixel_color color) {
+            switch (color) {
+                case r:
+                    return subpixel * (pow(2, 8) - 1) / (pow(2, 5) - 1);
+                    break;
+                case g:
+                    return subpixel * (pow(2, 8) - 1) / (pow(2, 6) - 1);
+                    break;
+                case b:
+                    return subpixel * (pow(2, 8) - 1) / (pow(2, 5) - 1);
+                    break;
+            }
+
+                return 0;
+            }
+
+        static Pixel pixel_from_16bit(const unsigned char* pixel) {
+            const unsigned short value = *reinterpret_cast<const unsigned short*>(pixel);
+
+            constexpr unsigned short b_16bit_mask = 0B0000000000011111;
+            constexpr unsigned short g_16bit_mask = 0B0000011111100000;
+            constexpr unsigned short r_16bit_mask = 0B1111100000000000;
+
+            const unsigned char R = recover_16b_value((value & r_16bit_mask) >> 11, r);
+            const unsigned char G = recover_16b_value((value & g_16bit_mask) >> 5, g);
+            const unsigned char B = recover_16b_value(value & b_16bit_mask, b);
+
+            return Pixel{B, G, R};
+        }
+};
 
 int main(const int argc, char** argv) {
-    unsigned char headers[54]{};
     const char* path = argc > 1 ? argv[1] : "../Rufous-Hummingbird_16.bmp";
 
-    bool file_was_read = load_file_bytes(path, headers, 54);
-    ERR_IF_FALSE(file_was_read, ERR_CANT_OPEN_FILE, path);
-    ERR_IF_FALSE(is_BMP(headers), ERR_IS_NOT_BMP, path);
+    BMP_header headers;
+    ERR_IF_FALSE(headers.load(path), ERR_CANT_OPEN_FILE, path);
+    ERR_IF_FALSE(headers.is_BMP(), ERR_IS_NOT_BMP, path);
+    ERR_IF_FALSE(headers.is_supported_bit_count(), ERR_UNSUPPORTED_BIT_COUNT, headers.bit_count);
+    ERR_IF_FALSE(headers.is_supported_compression(), ERR_UNSUPPORTED_COMPRESSION, headers.compression);
 
-    auto* headers_values = reinterpret_cast<BMP_header*>(headers);
+    Bitmap image(headers);
+    ERR_IF_FALSE(image.load(path), ERR_CANT_READ_IMAGE, path);
 
-    auto [sign, file_size, reserved,
-        data_offset, info_header_size, width, height, planes, bit_count,
-        compression, image_size, x_pixels_per_m, y_pixels_per_m,
-        colors_used, color_important] = *headers_values;
+    unsigned int last_x = headers.width - 1;
+    unsigned int last_y = headers.height - 1;
+    Pixel left_up = image.get_pixel(0, 0);
+    Pixel right_up = image.get_pixel(last_x, 0);
+    Pixel left_down = image.get_pixel(0, last_y);
+    Pixel right_down = image.get_pixel(last_x, last_y);
 
-    ERR_IF_FALSE(bit_count == 24 || bit_count == 16, ERR_UNSUPPORTED_BIT_COUNT, bit_count);
-    ERR_IF_FALSE(bit_count != 16 || compression == 3, ERR_UNSUPPORTED_COMPRESSION, compression);
-
-    auto pixels = new unsigned char[image_size];
-    ERR_IF_FALSE(load_file_bytes(path, pixels, image_size, data_offset), ERR_CANT_READ_IMAGE, path);
-
-    unsigned int bytes_per_pixel = bit_count / 8;
-
-    unsigned int last_x = width - 1;
-    unsigned int last_y = height - 1;
-
-    Pixel left_up = to_pixel(get_pixel_address(pixels, 0, 0, width, height, bytes_per_pixel), bit_count);
-    Pixel right_up = to_pixel(get_pixel_address(pixels, last_x, 0, width, height, bytes_per_pixel), bit_count);
-    Pixel left_down = to_pixel(get_pixel_address(pixels, 0, last_y, width, height, bytes_per_pixel), bit_count);
-    Pixel right_down = to_pixel(get_pixel_address(pixels, last_x, last_y, width, height, bytes_per_pixel), bit_count);
-
-    print_pixel(left_up); std::cout << "   ";
-    print_pixel(right_up); std::cout << std::endl;
-    print_pixel(left_down); std::cout << "    ";
-    print_pixel(right_down); std::cout << std::endl;
-
-    delete[] pixels;
-    return 0;
+    left_up.print_pixel(); std::cout << "   ";
+    right_up.print_pixel(); std::cout << std::endl;
+    left_down.print_pixel(); std::cout << "    ";
+    right_down.print_pixel(); std::cout << std::endl;
 }

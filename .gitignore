@@ -26,8 +26,4 @@ CLAUDE.md
 .claude/
 
 # bitmap: personal notes and task slides
-bitmap/notes.md
-bitmap/theory_16bit.md
-bitmap/implementation_16bit.md
-bitmap/theory_classes.md
-bitmap/*.pptx
+bitmap/materials/
